@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from backend.agents.privacy.gatekeeper import gatekeeper
 from backend.agents.rag.engine import rag_engine
+from backend.agents.portals.healthcare import healthcare_agent
 
 app = FastAPI(
     title="DRY AI Platform API",
@@ -82,4 +83,27 @@ async def search_knowledge(request: SearchQuery):
     return {
         "anonymized_query": clean_query,
         "context": context_chunks
+    }
+
+class ChatRequest(BaseModel):
+    question: str
+
+@app.post("/api/v1/portals/healthcare/chat")
+async def healthcare_chat(request: ChatRequest):
+    """
+    Phase 4: The Healthcare Agent Portal.
+    Full Loop: Anonymize -> Search -> Generate
+    """
+    # 1. Intercept and Anonymize
+    clean_question = gatekeeper.anonymize_text(request.question)
+    
+    # 2. Retrieve relevant medical context from our Qdrant vector store
+    context = rag_engine.retrieve_context(clean_question, top_k=3)
+    
+    # 3. Stream to the local LLM to get the final answer
+    answer = healthcare_agent.generate_response(clean_question, context)
+    
+    return {
+        "anonymized_question": clean_question,
+        "answer": answer
     }
