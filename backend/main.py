@@ -1,7 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
+from typing import List, Optional
 from backend.agents.privacy.gatekeeper import gatekeeper
+from backend.agents.rag.engine import rag_engine
 
 app = FastAPI(
     title="DRY AI Platform API",
@@ -29,6 +31,14 @@ async def health_check():
 class PrivacyRequest(BaseModel):
     text: str
 
+class DocumentRequest(BaseModel):
+    text: str
+    meta: Optional[dict] = None
+
+class SearchQuery(BaseModel):
+    query: str
+    top_k: int = 3
+
 @app.post("/api/v1/anonymize")
 async def anonymize_text(request: PrivacyRequest):
     """
@@ -38,4 +48,38 @@ async def anonymize_text(request: PrivacyRequest):
     clean_text = gatekeeper.anonymize_text(request.text)
     return {
         "anonymized_text": clean_text
+    }
+
+@app.post("/api/v1/knowledge/index")
+async def index_document(request: DocumentRequest):
+    """
+    Secure Indexing Endpoint.
+    Passes document through Gatekeeper, then indexes it in Qdrant.
+    """
+    # 1. Anonymize the data (The DRY Platform Guarantee)
+    clean_text = gatekeeper.anonymize_text(request.text)
+    
+    # 2. Index the clean data
+    success = rag_engine.index_document(clean_text, request.meta)
+    
+    return {
+        "status": "success" if success else "failed",
+        "indexed_text": clean_text
+    }
+
+@app.post("/api/v1/knowledge/search")
+async def search_knowledge(request: SearchQuery):
+    """
+    Secure Search Endpoint.
+    Anonymizes the query, then searches Qdrant for context.
+    """
+    # 1. Anonymize the query so we don't leak PII into search logs/vectors
+    clean_query = gatekeeper.anonymize_text(request.query)
+    
+    # 2. Retrieve context
+    context_chunks = rag_engine.retrieve_context(clean_query, top_k=request.top_k)
+    
+    return {
+        "anonymized_query": clean_query,
+        "context": context_chunks
     }
