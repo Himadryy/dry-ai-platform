@@ -1,0 +1,12 @@
+fastapi
+uvicorn
+sqlalchemy[asyncio]
+asyncpg
+psycopg2-binary
+qdrant-client
+haystack-ai
+presidio-analyzer
+presidio-anonymizer
+ollama
+pydantic-settings
+python-dotenv
